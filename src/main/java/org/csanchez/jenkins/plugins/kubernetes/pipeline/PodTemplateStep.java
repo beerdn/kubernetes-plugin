@@ -45,7 +45,7 @@ public class PodTemplateStep extends Step implements Serializable {
     private int idleMinutes;
 
     private String serviceAccount;
-    private String nodeSelector;
+    private String nodeSelector = "no_node_assigned";
     private Node.Mode nodeUsageMode;
     private String workingDir = ContainerTemplate.DEFAULT_WORKING_DIR;
 
