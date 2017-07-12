@@ -74,7 +74,7 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
 
     private String serviceAccount;
 
-    private String nodeSelector;
+    private String nodeSelector = "no_node_assigned";
 
     private Node.Mode nodeUsageMode;
 
