@@ -21,7 +21,7 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
 
     private int instanceCap;
     private String serviceAccount;
-    private String nodeSelector;
+    private String nodeSelector = "no_node_assigned";
     private String workingDir;
 
     private ContainerTemplate containerTemplate;
