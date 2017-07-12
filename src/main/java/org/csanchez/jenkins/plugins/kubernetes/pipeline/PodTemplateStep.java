@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.commons.lang.StringUtils;
 import org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate;
 import org.csanchez.jenkins.plugins.kubernetes.PodAnnotation;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.PodVolume;
@@ -45,7 +46,7 @@ public class PodTemplateStep extends Step implements Serializable {
     private int idleMinutes;
 
     private String serviceAccount;
-    private String nodeSelector = "no_node_assigned";
+    private String nodeSelector;
     private Node.Mode nodeUsageMode;
     private String workingDir = ContainerTemplate.DEFAULT_WORKING_DIR;
 
@@ -150,7 +151,13 @@ public class PodTemplateStep extends Step implements Serializable {
 
     @DataBoundSetter
     public void setNodeSelector(String nodeSelector) {
-        this.nodeSelector = nodeSelector;
+//      this.nodeSelector = nodeSelector;
+        this.nodeSelector = StringUtils.isBlank(nodeSelector) ? "app=nodeSelector_is_required" : nodeSelector;
+//	if (StringUtils.isEmpty(nodeSelector)) {
+//            this.nodeSelector = "app=nodeSelector_is_required";
+//        } else {
+//            this.nodeSelector = nodeSelector;
+//        }
     }
 
     public Node.Mode getNodeUsageMode() {

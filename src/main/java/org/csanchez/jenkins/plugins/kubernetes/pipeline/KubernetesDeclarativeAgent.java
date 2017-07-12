@@ -21,7 +21,7 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
 
     private int instanceCap;
     private String serviceAccount;
-    private String nodeSelector = "no_node_assigned";
+    private String nodeSelector;
     private String workingDir;
 
     private ContainerTemplate containerTemplate;
@@ -78,7 +78,13 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
 
     @DataBoundSetter
     public void setNodeSelector(String nodeSelector) {
-        this.nodeSelector = nodeSelector;
+//      this.nodeSelector = nodeSelector;
+        this.nodeSelector = StringUtils.isBlank(nodeSelector) ? "app=nodeSelector_is_required" : nodeSelector;
+//        if (StringUtils.isEmpty(nodeSelector)) {
+//	    this.nodeSelector = "app=nodeSelector_is_required";
+//        } else {
+//            this.nodeSelector = nodeSelector;
+//        }
     }
 
     public String getWorkingDir() {

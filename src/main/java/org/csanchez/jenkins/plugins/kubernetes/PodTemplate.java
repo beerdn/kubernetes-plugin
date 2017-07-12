@@ -74,7 +74,7 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
 
     private String serviceAccount;
 
-    private String nodeSelector = "no_node_assigned";
+    private String nodeSelector;
 
     private Node.Mode nodeUsageMode;
 
@@ -314,7 +314,13 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
 
     @DataBoundSetter
     public void setNodeSelector(String nodeSelector) {
-        this.nodeSelector = nodeSelector;
+//      this.nodeSelector = nodeSelector;
+        this.nodeSelector = StringUtils.isBlank(nodeSelector) ? "app=nodeSelector_is_required" : nodeSelector;
+//        if (StringUtils.isEmpty(nodeSelector)) {
+//            this.nodeSelector = "app=nodeSelector_is_required";
+//        } else {
+//            this.nodeSelector = nodeSelector;
+//        }
     }
 
     public String getNodeSelector() {
