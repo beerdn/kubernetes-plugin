@@ -104,7 +104,20 @@ public class PodTemplateUtils {
 
         String name = template.getName();
         String label = template.getLabel();
-        String nodeSelector = Strings.isNullOrEmpty(template.getNodeSelector()) ? parent.getNodeSelector() : template.getNodeSelector();
+
+	String nodeSelector = "app=nodeSelector_is_required";
+	String enforcedNodeSelector = "app=nodeSelector_is_required";
+	String parentNodeSelector = Strings.isNullOrEmpty(parent.getNodeSelector()) ? enforcedNodeSelector : parent.getNodeSelector();
+	String templateNodeSelector = Strings.isNullOrEmpty(template.getNodeSelector()) ? enforcedNodeSelector : template.getNodeSelector();
+	if (parentNodeSelector.equals(enforcedNodeSelector) && templateNodeSelector.equals(enforcedNodeSelector)) {
+		nodeSelector = enforcedNodeSelector;
+	} else if (!templateNodeSelector.equals(enforcedNodeSelector) ) {
+		nodeSelector = templateNodeSelector;	
+	} else {
+		nodeSelector = parentNodeSelector;
+	}
+
+        //String nodeSelector = Strings.isNullOrEmpty(template.getNodeSelector()) ? parent.getNodeSelector() : template.getNodeSelector();
         String serviceAccount = Strings.isNullOrEmpty(template.getServiceAccount()) ? parent.getServiceAccount() : template.getServiceAccount();
         Node.Mode nodeUsageMode = template.getNodeUsageMode() == null ? parent.getNodeUsageMode() : template.getNodeUsageMode();
 

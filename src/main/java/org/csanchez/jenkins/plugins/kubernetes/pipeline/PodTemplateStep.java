@@ -153,11 +153,6 @@ public class PodTemplateStep extends Step implements Serializable {
     public void setNodeSelector(String nodeSelector) {
 //      this.nodeSelector = nodeSelector;
         this.nodeSelector = StringUtils.isBlank(nodeSelector) ? "app=nodeSelector_is_required" : nodeSelector;
-//	if (StringUtils.isEmpty(nodeSelector)) {
-//            this.nodeSelector = "app=nodeSelector_is_required";
-//        } else {
-//            this.nodeSelector = nodeSelector;
-//        }
     }
 
     public Node.Mode getNodeUsageMode() {

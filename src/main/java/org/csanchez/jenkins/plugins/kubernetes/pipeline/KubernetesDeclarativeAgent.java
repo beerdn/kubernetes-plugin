@@ -80,11 +80,6 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
     public void setNodeSelector(String nodeSelector) {
 //      this.nodeSelector = nodeSelector;
         this.nodeSelector = StringUtils.isBlank(nodeSelector) ? "app=nodeSelector_is_required" : nodeSelector;
-//        if (StringUtils.isEmpty(nodeSelector)) {
-//	    this.nodeSelector = "app=nodeSelector_is_required";
-//        } else {
-//            this.nodeSelector = nodeSelector;
-//        }
     }
 
     public String getWorkingDir() {

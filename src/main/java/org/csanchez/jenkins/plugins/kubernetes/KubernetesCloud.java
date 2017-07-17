@@ -30,6 +30,7 @@ import javax.annotation.Nonnull;
 
 import hudson.model.labels.LabelAtom;
 import io.fabric8.kubernetes.api.model.*;
+import io.fabric8.kubernetes.client.dsl.PodResource;
 
 import org.apache.commons.lang.StringUtils;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.PodVolume;
@@ -627,6 +628,8 @@ public class KubernetesCloud extends Cloud {
         @CheckForNull
         private final Label label;
 
+	private String mypodId;
+
         public ProvisioningCallback(@Nonnull KubernetesCloud cloud, @Nonnull PodTemplate t, @CheckForNull Label label) {
             this.cloud = cloud;
             this.t = t;
@@ -686,12 +689,14 @@ public class KubernetesCloud extends Cloud {
                 pod = client.pods().inNamespace(namespace).create(pod);
                 LOGGER.log(Level.INFO, "Created Pod: {0}", podId);
 
+		mypodId = podId; //Ning
+
                 // We need the pod to be running and connected before returning
                 // otherwise this method keeps being called multiple times
                 ImmutableList<String> validStates = ImmutableList.of("Running");
 
                 int i = 0;
-                int j = 100; // wait 600 seconds
+                int j = 20; // wait 600 seconds
 
                 List<ContainerStatus> containerStatuses = null;
 
@@ -741,6 +746,7 @@ public class KubernetesCloud extends Cloud {
                     }
                 }
                 String status = pod.getStatus().getPhase();
+		
                 if (!validStates.contains(status)) {
                     throw new IllegalStateException("Container is not running after " + j + " attempts, status: " + status);
                 }
@@ -760,6 +766,7 @@ public class KubernetesCloud extends Cloud {
                     Thread.sleep(1000);
                 }
                 if (!slave.getComputer().isOnline()) {
+		    LOGGER.log(Level.INFO, "haha");
                     if (containerStatuses != null) {
                         logLastLines(containerStatuses, podId, namespace, slave, null);
                     }
@@ -769,6 +776,11 @@ public class KubernetesCloud extends Cloud {
                 return slave;
             } catch (Throwable ex) {
                 LOGGER.log(Level.SEVERE, "Error in provisioning; slave={0}, template={1}", new Object[] { slave, t });
+
+		LOGGER.log(Level.INFO, "Removing pod {0}", mypodId);
+		PodResource<Pod, DoneablePod> mypods = client.pods().inNamespace(namespace).withName(mypodId);
+		mypods.delete();
+
                 if (slave != null) {
                     LOGGER.log(Level.FINER, "Removing Jenkins node: {0}", slave.getNodeName());
                     Jenkins.getInstance().removeNode(slave);
