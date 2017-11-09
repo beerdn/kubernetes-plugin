@@ -31,13 +31,16 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import hudson.EnvVars;
+import hudson.FilePath;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.fabric8.kubernetes.client.KubernetesClientTimeoutException;
 import org.apache.commons.io.output.TeeOutputStream;
 
 import com.google.common.io.NullOutputStream;
@@ -50,11 +53,11 @@ import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.kubernetes.client.Watch;
-import io.fabric8.kubernetes.client.Watcher;
+import io.fabric8.kubernetes.client.dsl.Execable;
 import io.fabric8.kubernetes.client.dsl.ExecListener;
 import io.fabric8.kubernetes.client.dsl.ExecWatch;
 import okhttp3.Response;
+import org.jenkinsci.plugins.workflow.steps.EnvironmentExpander;
 
 /**
  * This decorator interacts directly with the Kubernetes exec API to run commands inside a container. It does not use
@@ -68,36 +71,43 @@ public class ContainerExecDecorator extends LauncherDecorator implements Seriali
     private static final String CONTAINER_READY_TIMEOUT_SYSTEM_PROPERTY = ContainerExecDecorator.class.getName() + ".containerReadyTimeout";
     private static final long CONTAINER_READY_TIMEOUT = containerReadyTimeout();
     private static final String COOKIE_VAR = "JENKINS_SERVER_COOKIE";
+    private static final String JENKINS_HOME = "JENKINS_HOME=";
     private static final Logger LOGGER = Logger.getLogger(ContainerExecDecorator.class.getName());
 
     private final transient KubernetesClient client;
+
+    @SuppressFBWarnings(value = "SE_TRANSIENT_FIELD_NOT_RESTORED", justification = "not needed on deserialization")
+    private final transient List<Closeable> closables = new ArrayList<>();
     private final String podName;
     private final String namespace;
     private final String containerName;
+    private final EnvironmentExpander environmentExpander;
 
-    private transient ExecWatch watch;
-    private transient ContainerExecProc proc;
-
-    public ContainerExecDecorator(KubernetesClient client, String podName,  String containerName, String namespace) {
+    public ContainerExecDecorator(KubernetesClient client, String podName, String containerName, String namespace, EnvironmentExpander environmentExpander) {
         this.client = client;
         this.podName = podName;
         this.namespace = namespace;
         this.containerName = containerName;
+        this.environmentExpander = environmentExpander;
+    }
+
+    public ContainerExecDecorator(KubernetesClient client, String podName, String containerName, String namespace) {
+        this(client, podName, containerName, namespace, null);
     }
 
     @Deprecated
-    public ContainerExecDecorator(KubernetesClient client, String podName,  String containerName, AtomicBoolean alive, CountDownLatch started, CountDownLatch finished, String namespace) {
-        this(client, podName, containerName, namespace);
+    public ContainerExecDecorator(KubernetesClient client, String podName, String containerName, AtomicBoolean alive, CountDownLatch started, CountDownLatch finished, String namespace) {
+        this(client, podName, containerName, namespace, null);
     }
 
     @Deprecated
     public ContainerExecDecorator(KubernetesClient client, String podName, String containerName, AtomicBoolean alive, CountDownLatch started, CountDownLatch finished) {
-        this(client, podName, containerName, null);
+        this(client, podName, containerName, null, null);
     }
 
     @Deprecated
     public ContainerExecDecorator(KubernetesClient client, String podName, String containerName, String path, AtomicBoolean alive, CountDownLatch started, CountDownLatch finished) {
-        this(client, podName, containerName, null);
+        this(client, podName, containerName, null, null);
     }
 
     @Override
@@ -105,36 +115,55 @@ public class ContainerExecDecorator extends LauncherDecorator implements Seriali
         return new Launcher.DecoratedLauncher(launcher) {
             @Override
             public Proc launch(ProcStarter starter) throws IOException {
-                if (!waitUntilContainerIsReady()) {
-                    throw new IOException("Failed to execute shell script inside container " +
-                            "[" + containerName + "] of pod [" + podName + "]." +
-                            " Timed out waiting for container to become ready!");
+                boolean quiet = starter.quiet();
+                FilePath pwd = starter.pwd();
+
+                String [] cmdEnvs = starter.envs();
+
+                //check if the cmd is sourced from Jenkins, rather than another plugin; if so, skip cmdEnvs as we are getting other environment variables
+                for (String cmd : cmdEnvs) {
+                    if (cmd.startsWith(JENKINS_HOME)) {
+                        cmdEnvs = new String[0];
+                        LOGGER.info("Skipping injection of procstarter cmdenvs due to JENKINS_HOME present");
+                        break;
+                    }
                 }
+                String [] commands = getCommands(starter);
+                return doLaunch(quiet, cmdEnvs, starter.stdout(), pwd,  commands);
+            }
+
+            private Proc doLaunch(boolean quiet, String [] cmdEnvs,  OutputStream outputForCaller, FilePath pwd, String... commands) throws IOException {
+                waitUntilContainerIsReady();
 
                 final CountDownLatch started = new CountDownLatch(1);
                 final CountDownLatch finished = new CountDownLatch(1);
                 final AtomicBoolean alive = new AtomicBoolean(false);
 
+
                 PrintStream printStream = launcher.getListener().getLogger();
                 OutputStream stream = printStream;
                 // Do not send this command to the output when in quiet mode
-                if (starter.quiet()) {
+                if (quiet) {
                     stream = new NullOutputStream();
                     printStream = new PrintStream(stream, false, StandardCharsets.UTF_8.toString());
                 }
-                
+
                 // we need to keep the last bytes in the stream to parse the exit code as it is printed there
                 // so we use a buffer
                 ExitCodeOutputStream exitCodeOutputStream = new ExitCodeOutputStream();
                 // send container output both to the job output and our buffer
                 stream = new TeeOutputStream(exitCodeOutputStream, stream);
+                // Send to proc caller as well if they sent one
+                if (outputForCaller != null) {
+                    stream = new TeeOutputStream(outputForCaller, stream);
+                }
 
                 String msg = "Executing shell script inside container [" + containerName + "] of pod [" + podName + "]";
                 LOGGER.log(Level.FINEST, msg);
                 printStream.println(msg);
 
-                watch = client.pods().inNamespace(namespace).withName(podName).inContainer(containerName)
-                        .redirectingInput().writingOutput(stream).writingError(stream).withTTY()
+                Execable<String, ExecWatch> execable = client.pods().inNamespace(namespace).withName(podName).inContainer(containerName)
+                        .redirectingInput().writingOutput(stream).writingError(stream)
                         .usingListener(new ExecListener() {
                             @Override
                             public void onOpen(Response response) {
@@ -161,137 +190,134 @@ public class ContainerExecDecorator extends LauncherDecorator implements Seriali
                                 started.countDown();
                                 LOGGER.log(Level.FINEST, "onClose : {0}", finished);
                                 if (finished.getCount() == 0) {
-                                    LOGGER.log(Level.SEVERE,
+                                    LOGGER.log(Level.WARNING,
                                             "onClose called but latch already finished. This indicates a bug in the kubernetes-plugin");
                                 }
                                 finished.countDown();
                             }
-                        }).exec();
+                        });
 
-                waitQuietly(started);
-
-                if (starter.pwd() != null) {
-                    // We need to get into the project workspace.
-                    // The workspace is not known in advance, so we have to execute a cd command.
-                    watch.getInput().write(
-                            String.format("cd \"%s\"%s", starter.pwd(), NEWLINE).getBytes(StandardCharsets.UTF_8));
-                }
-                doExec(watch, printStream, getCommands(starter));
-                proc = new ContainerExecProc(watch, alive, finished, new Callable<Integer>() {
-                    @Override
-                    public Integer call() {
-                        return exitCodeOutputStream.getExitCode();
+                ExecWatch watch;
+                try {
+                    watch = execable.exec("/bin/sh");
+                } catch (KubernetesClientException e) {
+                    if (e.getCause() instanceof InterruptedException) {
+                        throw new IOException("JENKINS-40825: interrupted while starting websocket connection", e);
+                    } else {
+                        throw e;
                     }
-                });
-                return proc;
+                }
+
+                try {
+                    started.await();
+                } catch (InterruptedException e) {
+                    closeWatch(watch);
+                    throw new IOException("JENKINS-40825: interrupted while waiting for websocket connection", e);
+                }
+
+                try {
+                    if (pwd != null) {
+                        // We need to get into the project workspace.
+                        // The workspace is not known in advance, so we have to execute a cd command.
+                        watch.getInput().write(
+                                String.format("cd \"%s\"%s", pwd, NEWLINE).getBytes(StandardCharsets.UTF_8));
+
+                    }
+
+                    EnvVars envVars = new EnvVars();
+                    if (environmentExpander != null) {
+                        environmentExpander.expand(envVars);
+                    }
+
+                    //setup specific command envs passed into cmd
+                    if (cmdEnvs != null) {
+                        for (String cmdEnv : cmdEnvs) {
+                            envVars.addLine(cmdEnv);
+                        }
+                    }
+
+                    this.setupEnvironmentVariable(envVars, watch);
+                    doExec(watch, printStream, commands);
+                    ContainerExecProc proc = new ContainerExecProc(watch, alive, finished, exitCodeOutputStream::getExitCode);
+                    closables.add(proc);
+                    return proc;
+                }  catch (InterruptedException ie) {
+                    throw new InterruptedIOException(ie.getMessage());
+                } catch (Exception e) {
+                    closeWatch(watch);
+                    throw e;
+                }
             }
 
             @Override
             public void kill(Map<String, String> modelEnvVars) throws IOException, InterruptedException {
-                // String cookie = modelEnvVars.get(COOKIE_VAR);
-                // TODO we need to use the cookie for something
-                getListener().getLogger().println("Killing process.");
-                ContainerExecDecorator.this.close();
+                getListener().getLogger().println("Killing processes");
+
+                String cookie = modelEnvVars.get(COOKIE_VAR);
+
+                int exitCode = doLaunch(
+                        true, null, null, null,
+                        "sh", "-c", "kill \\`grep -l '" + COOKIE_VAR + "=" + cookie  +"' /proc/*/environ | cut -d / -f 3 \\`"
+                ).join();
+
+                getListener().getLogger().println("kill finished with exit code " + exitCode);
             }
 
-
-            private boolean isContainerReady(Pod pod, String container) {
-                if (pod == null || pod.getStatus() == null || pod.getStatus().getContainerStatuses() == null) {
-                    return false;
-                }
-
-                for (ContainerStatus info : pod.getStatus().getContainerStatuses()) {
-                    if (info.getName().equals(container) && info.getReady()) {
-                        return true;
+            private void setupEnvironmentVariable(EnvVars vars, ExecWatch watch) throws IOException
+            {
+                for (Map.Entry<String, String> entry : vars.entrySet()) {
+                    //Check that key is bash compliant.
+                    if (entry.getKey().matches("[a-zA-Z_][a-zA-Z0-9_]*")) {
+                            watch.getInput().write(
+                                    String.format(
+                                            "export %s='%s'%s",
+                                            entry.getKey(),
+                                            entry.getValue().replace("'", "'\\''"),
+                                            NEWLINE
+                                    ).getBytes(StandardCharsets.UTF_8)
+                            );
+                        }
                     }
-                }
-                return false;
             }
 
-            private boolean waitUntilContainerIsReady() {
-                int i = 0;
-                int j = 10; // wait 60 seconds
-                Pod pod = client.pods().inNamespace(namespace).withName(podName).get();
+            private void waitUntilContainerIsReady() throws IOException {
+                try {
+                    Pod pod = client.pods().inNamespace(namespace).withName(podName)
+                            .waitUntilReady(CONTAINER_READY_TIMEOUT, TimeUnit.MINUTES);
 
-                if (pod == null) {
-                    launcher.getListener().getLogger().println("Waiting for pod [" + podName + "] to exist.");
-                    // wait for Pod to be running.
-                    for (; i < j; i++) {
-                        LOGGER.log(Level.INFO, "Getting pod ({1}/{2}): {0}", new Object[] {podName, i, j});
-                        pod = client.pods().inNamespace(namespace).withName(podName).get();
-                        if (pod != null) {
-                            break;
-                        }
-                        LOGGER.log(Level.INFO, "Waiting 6 seconds before checking if pod exists ({1}/{2}): {0}", new Object[] {podName, i, j});
-                        try {
-                            Thread.sleep(6000);
-                        } catch (InterruptedException e) {
-                            return false;
-                        }
+                    if (pod == null || pod.getStatus() == null || pod.getStatus().getContainerStatuses() == null) {
+                        throw new IOException("Failed to execute shell script inside container " +
+                                "[" + containerName + "] of pod [" + podName + "]." +
+                                "Failed to get container status");
                     }
-                }
 
-                if (pod == null) {
-                    throw new IllegalArgumentException("Container with name:[" + containerName + "] not found in pod:[" + podName + "], pod doesn't exist");
-                }
-
-                if (isContainerReady(pod, containerName)) {
-                    return true;
-                }
-
-                launcher.getListener().getLogger().println("Waiting for container container [" + containerName + "] of pod [" + podName + "] to become ready.");
-                final CountDownLatch latch = new CountDownLatch(1);
-                Watcher<Pod> podWatcher = new Watcher<Pod>() {
-                    @Override
-                    public void eventReceived(Action action, Pod resource) {
-                        switch (action) {
-                            case MODIFIED:
-                                if (isContainerReady(resource, containerName)) {
-                                    latch.countDown();
-                                }
-                                break;
-                            default:
-                                break;
+                    for (ContainerStatus info : pod.getStatus().getContainerStatuses()) {
+                        if (info.getName().equals(containerName)) {
+                            if (info.getReady()) {
+                                return;
+                            } else {
+                                // container died in the meantime
+                                throw new IOException("container [" + containerName + "] of pod [" + podName + "] is not ready, state is " + info.getState());
+                            }
                         }
                     }
-
-                    @Override
-                    public void onClose(KubernetesClientException cause) {
-
-                    }
-                };
-
-                try (Watch watch = client.pods().inNamespace(namespace).withName(podName).watch(podWatcher)) {
-                    if (latch.await(CONTAINER_READY_TIMEOUT, TimeUnit.MINUTES)) {
-                        return true;
-                    }
-                } catch (InterruptedException e) {
-                    return false;
+                    throw new IOException("container [" + containerName + "] does not exist in pod [" + podName + "]");
+                } catch (InterruptedException | KubernetesClientTimeoutException e) {
+                    throw new IOException("Failed to execute shell script inside container " +
+                            "[" + containerName + "] of pod [" + podName + "]." +
+                            " Timed out waiting for container to become ready!", e);
                 }
-                return false;
             }
         };
     }
 
     @Override
     public void close() throws IOException {
-        if (watch != null) {
+        for (Closeable closable : closables) {
             try {
-                watch.close();
-            } catch (IllegalStateException e) {
-                LOGGER.log(Level.INFO, "Watch was already closed: {0}", e.getMessage());
+                closable.close();
             } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error closing watch", e);
-            } finally {
-                watch = null;
-            }
-        }
-
-        if (proc != null) {
-            try {
-                proc.kill();
-            } catch (InterruptedException e) {
-                throw new InterruptedIOException();
+                LOGGER.log(Level.FINE, "failed to close {0}");
             }
         }
     }
@@ -310,11 +336,11 @@ public class ContainerExecDecorator extends LauncherDecorator implements Seriali
             out.println();
             watch.getInput().write(NEWLINE.getBytes(StandardCharsets.UTF_8));
 
-            // get the command exit code and print it padded so it is easier to parse in ConatinerExecProc
+            // get the command exit code and print it padded so it is easier to parse in ContainerExecProc
             // We need to exit so that we know when the command has finished.
             sb.append(ExitCodeOutputStream.EXIT_COMMAND);
             out.print(ExitCodeOutputStream.EXIT_COMMAND);
-            LOGGER.log(Level.FINEST, "Executing command: {0}", sb.toString());
+            LOGGER.log(Level.FINEST, "Executing command: {0}", sb);
             watch.getInput().write(ExitCodeOutputStream.EXIT_COMMAND.getBytes(StandardCharsets.UTF_8));
 
             out.flush();
@@ -335,20 +361,20 @@ public class ContainerExecDecorator extends LauncherDecorator implements Seriali
         return allCommands.toArray(new String[allCommands.size()]);
     }
 
-    private static void waitQuietly(CountDownLatch latch) {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            //ignore
-        }
-    }
-
     private static Long containerReadyTimeout() {
         String timeout = System.getProperty(CONTAINER_READY_TIMEOUT_SYSTEM_PROPERTY, String.valueOf(DEFAULT_CONTAINER_READY_TIMEOUT));
         try {
             return Long.parseLong(timeout);
         } catch (NumberFormatException e) {
             return DEFAULT_CONTAINER_READY_TIMEOUT;
+        }
+    }
+
+    private static void closeWatch(ExecWatch watch) {
+        try {
+            watch.close();
+        } catch (Exception e) {
+            LOGGER.log(Level.INFO, "failed to close watch", e);
         }
     }
 
@@ -363,7 +389,6 @@ public class ContainerExecDecorator extends LauncherDecorator implements Seriali
         private EvictingQueue<Integer> queue = EvictingQueue.create(20);
 
         public ExitCodeOutputStream() {
-            
         }
 
         @Override

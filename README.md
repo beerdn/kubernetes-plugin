@@ -13,12 +13,19 @@ Slaves are launched using JNLP, so it is expected that the image connects automa
 For that some environment variables are automatically injected:
 
 * `JENKINS_URL`: Jenkins web interface url
-* `JENKINS_JNLP_URL`: url for the jnlp definition of the specific slave
 * `JENKINS_SECRET`: the secret key for authentication
 * `JENKINS_NAME`: the name of the Jenkins agent
 
-Tested with [`jenkinsci/jnlp-slave`](https://hub.docker.com/r/jenkinsci/jnlp-slave),
+Tested with [`jenkins/jnlp-slave`](https://hub.docker.com/r/jenkins/jnlp-slave),
 see the [Docker image source code](https://github.com/carlossg/jenkins-slave-docker).
+
+
+# Kubernetes Cloud Configuration
+
+In Jenkins settings click on add cloud, select `Kubernetes` and fill the information, like
+_Name_, _Kubernetes URL_, _Kubernetes server certificate key_, ...
+
+If _Kubernetes URL_ is not set, the connection options will be autoconfigured from service account or kube config file.
 
 
 # Pipeline support
@@ -40,7 +47,7 @@ Find more examples in the [examples dir](examples).
 The default jnlp agent image used can be customized by adding it to the template
 
 ```groovy
-containerTemplate(name: 'jnlp', image: 'jenkinsci/jnlp-slave:2.62-alpine', args: '${computer.jnlpmac} ${computer.name}'),
+containerTemplate(name: 'jnlp', image: 'jenkins/jnlp-slave:3.10-1-alpine', args: '${computer.jnlpmac} ${computer.name}'),
 ```
 
 ### Container Group Support
@@ -97,15 +104,22 @@ Either way it provides access to the following fields:
 * **nodeSelector** The node selector of the pod.
 * **nodeUsageMode** Either 'NORMAL' or 'EXCLUSIVE', this controls whether Jenkins only schedules jobs with label expressions matching or use the node as much as possible.
 * **volumes** Volumes that are defined for the pod and are mounted by **ALL** containers.
-* **envVars*** Environment variables that are applied to **ALL** containers.
+* **envVars** Environment variables that are applied to **ALL** containers.
+    * **envVar** An environment variable whose value is defined inline.
+    * **secretEnvVar** An environment variable whose value is derived from a Kubernetes secret.
+* **imagePullSecrets** List of pull secret names
 * **annotations** Annotations to apply to the pod.
 * **inheritFrom** List of one or more pod templates to inherit from *(more details below)*.
+* **slaveConnectTimeout** Timeout in seconds for a slave to be online.
+* **activeDeadlineSeconds** Pod is deleted after this deadline is passed.
 
 The `containerTemplate` is a template of container that will be added to the pod. Again, its configurable via the user interface or via pipeline and allows you to set the following fields:
 
 * **name** The name of the container.
 * **image** The image of the container.
 * **envVars** Environment variables that are applied to the container **(supplementing and overriding env vars that are set on pod level)**.
+    * **envVar** An environment variable whose value is defined inline.
+    * **secretEnvVar** An environment variable whose value is derived from a Kubernetes secret.
 * **command** The command the container will execute.
 * **args** The arguments passed to the command.
 * **ttyEnabled** Flag to mark that tty should be enabled.
@@ -157,8 +171,8 @@ This is made possible via nesting. You can nest multiple pod templates together 
 
 The example below composes two different podTemplates in order to create one with maven and docker capabilities.
 
-    podTemplate(label: 'docker', containers: [containerTemplate(image: 'docker)]) {
-        podTemplate(label: 'maven', containers: [containerTemplate(image: 'maven)]) {
+    podTemplate(label: 'docker', containers: [containerTemplate(image: 'docker', name: 'docker', command: 'cat', ttyEnabled: true)]) {
+        podTemplate(label: 'maven', containers: [containerTemplate(image: 'maven', name: 'maven', command: 'cat', ttyEnabled: true)]) {
             // do stuff
         }
     }
@@ -190,7 +204,7 @@ Then consumers of the library could just express the need for a maven pod with d
 
     dockerTemplate {
         mavenTemplate {
-            ssh """
+            sh """
                mvn clean install
                docker build -t  myimage ./target/docker/
             """
@@ -212,17 +226,16 @@ podTemplate(label: 'mypod', cloud: 'kubernetes', containers: [
         name: 'mariadb',
         image: 'mariadb:10.1',
         ttyEnabled: true,
-        command: 'cat',
         privileged: false,
         alwaysPullImage: false,
         workingDir: '/home/jenkins',
-        args: '',
         resourceRequestCpu: '50m',
         resourceLimitCpu: '100m',
         resourceRequestMemory: '100Mi',
         resourceLimitMemory: '200Mi',
         envVars: [
-            containerEnvVar(key: 'MYSQL_ALLOW_EMPTY_PASSWORD', value: 'true'),
+            envVar(key: 'MYSQL_ALLOW_EMPTY_PASSWORD', value: 'true'),
+            secretEnvVar(key: 'MYSQL_PASSWORD', secretName: 'mysql-secret', secretKey: 'password'),
             ...
         ],
         ports: [portMapping(name: 'mysql', containerPort: 3306, hostPort: 3306)]
@@ -237,6 +250,7 @@ volumes: [
     nfsVolume(mountPath: '/etc/mount5', serverAddress: '127.0.0.1', serverPath: '/', readOnly: true),
     persistentVolumeClaim(mountPath: '/etc/mount6', claimName: 'myClaim', readOnly: true)
 ],
+imagePullSecrets: [ 'pull-secret' ],
 annotations: [
     podAnnotation(key: "my-key", value: "my-value")
     ...
@@ -246,6 +260,34 @@ annotations: [
 
 ```
 
+## Declarative Pipeline
+
+Declarative Pipeline support requires Jenkins 2.66+
+
+Example at [examples/declarative.groovy](examples/declarative.groovy)
+
+## Accessing container logs from the pipeline
+
+If you use the `containerTemplate` to run some service in the background
+(e.g. a database for your integration tests), you might want to access its log from the pipeline.
+This can be done with the `containerLog` step, which prints the log of the
+requested container to the build log.
+
+#### Required Parameters
+* **name** the name of the container to get logs from, as defined in `podTemplate`. Parameter name
+can be ommited in simple usage:
+
+```groovy
+containerLog 'mongodb'
+```
+
+#### Optional Parameters
+* **returnLog** return the log instead of printing it to the build log (default: `false`)
+* **tailingLines** only return the last n lines of the log (optional)
+* **sinceSeconds** only return the last n seconds of the log (optional)
+* **limitBytes** limit output to n bytes (from the beginning of the log, not exact).
+
+Also see the online help and [examples/containerLog.groovy](examples/containerLog.groovy).
 
 # Constraints
 
@@ -313,10 +355,49 @@ at `DEBUG` level.
 
     kubectl get -a pods -o name --selector=jenkins=slave | xargs -I {} kubectl delete {}
 
-# Building
+# Building and Testing
 
-Run `mvn clean package` and copy `target/kubernetes.hpi` to Jenkins plugins folder.
+Integration tests will use the currently configured context autodetected from kube config file or service account.
 
+## Manual Testing
+
+Run `mvn clean install` and copy `target/kubernetes.hpi` to Jenkins plugins folder.
+
+## Integration Tests with Minikube
+
+For integration tests install and start [minikube](https://github.com/kubernetes/minikube).
+Tests will detect it and run a set of integration tests in a new namespace.
+
+Some integration tests run a local jenkins, so the host that runs them needs
+to be accessible from the kubernetes cluster.
+
+If your minikube is running in a VM (e.g. on virtualbox) and the host running `mvn`
+does not have a public hostname for the VM to access, you can set the `jenkins.host.address`
+system property to the (host-only or NAT) IP of your host:
+
+    mvn clean install -Djenkins.host.address=192.168.99.1
+
+## Integration Tests in a Different Cluster
+
+Ensure you create the namespaces and roles with the following commands, then run the tests
+in namespace `kubernetes-plugin` with the service account `jenkins`
+(edit `src/test/kubernetes/service-account.yml` to use a different service account)
+
+```
+kubectl create namespace kubernetes-plugin-test
+kubectl create namespace kubernetes-plugin-test-overridden-namespace
+kubectl create namespace kubernetes-plugin-test-overridden-namespace2
+kubectl apply -n kubernetes-plugin-test -f src/main/kubernetes/service-account.yml
+kubectl apply -n kubernetes-plugin-test-overridden-namespace -f src/main/kubernetes/service-account.yml
+kubectl apply -n kubernetes-plugin-test-overridden-namespace2 -f src/main/kubernetes/service-account.yml
+kubectl apply -n kubernetes-plugin-test -f src/test/kubernetes/service-account.yml
+kubectl apply -n kubernetes-plugin-test-overridden-namespace -f src/test/kubernetes/service-account.yml
+kubectl apply -n kubernetes-plugin-test-overridden-namespace2 -f src/test/kubernetes/service-account.yml
+```
+
+Please note that the system you run `mvn` on needs to be reachable from the cluster.
+If you see the slaves happen to connect to the wrong host, see you can use
+`jenkins.host.address` as mentioned above.
 
 # Docker image
 
@@ -330,22 +411,26 @@ Based on the [official image](https://registry.hub.docker.com/_/jenkins/).
 
 # Running in Kubernetes
 
+The example configuration will create a stateful set running Jenkins with persistent volume
+and using a service account to authenticate to Kubernetes API.
+
 ## Running locally with minikube
 
 A local testing cluster with one node can be created with [minikube](https://github.com/kubernetes/minikube)
 
     minikube start
 
-Set the correct permissions for the host mounted volume
+You may need to set the correct permissions for host mounted volumes
 
     minikube ssh
-    sudo mkdir -p /data/kubernetes-plugin-jenkins
-    sudo chown 1000:1000 /data/kubernetes-plugin-jenkins
+    sudo chown 1000:1000 /tmp/hostpath-provisioner/pvc-*
 
-Then create the Jenkins ReplicationController and Service with
+Then create the Jenkins namespace, controller and Service with
 
-    kubectl create -f ./src/main/kubernetes/minikube.yml
+    kubectl create namespace kubernetes-plugin
     kubectl config set-context $(kubectl config current-context) --namespace=kubernetes-plugin
+    kubectl create -f src/main/kubernetes/service-account.yml
+    kubectl create -f src/main/kubernetes/jenkins.yml
 
 Get the url to connect to with
 
@@ -355,14 +440,12 @@ Get the url to connect to with
 
 Assuming you created a Kubernetes cluster named `jenkins` this is how to run both Jenkins and slaves there.
 
-Create a GCE disk named `kubernetes-jenkins` to store the data.
+Creating all the elements and setting the default namespace
 
-    gcloud compute disks create --size 20GB kubernetes-jenkins
-
-Creating all the elements and setting the default namespace (Optionally modify default K8 Compute Resources limits [5ooMi RAM]; See below)
-
-    kubectl create -f ./src/main/kubernetes/gke.yml
+    kubectl create namespace kubernetes-plugin
     kubectl config set-context $(kubectl config current-context) --namespace=kubernetes-plugin
+    kubectl create -f src/main/kubernetes/service-account.yml
+    kubectl create -f src/main/kubernetes/jenkins.yml
 
 Connect to the ip of the network load balancer created by Kubernetes, port 80.
 Get the ip (in this case `104.197.19.100`) with `kubectl describe services/jenkins`
@@ -395,6 +478,8 @@ Under credentials, click `Add` and select `Kubernetes Service Account`,
 or alternatively use the Kubernetes API username and password. Select 'Certificate' as credentials type if the
 kubernetes cluster is configured to use client certificates for authentication.
 
+Using `Kubernetes Service Account` will cause the plugin to use the default token mounted inside the Jenkins pod. See [Configure Service Accounts for Pods](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/) for more information.
+
 ![image](credentials.png)
 
 You may want to set `Jenkins URL` to the internal service IP, `http://10.175.244.232` in this case,
@@ -404,7 +489,7 @@ Set `Container Cap` to a reasonable number for tests, i.e. 3.
 
 Add an image with
 
-* Docker image: `jenkinsci/jnlp-slave`
+* Docker image: `jenkins/jnlp-slave`
 * Jenkins slave root directory: `/home/jenkins`
 
 ![image](configuration.png)
@@ -418,9 +503,9 @@ Tearing it down
 
 ## Customizing the deployment
 
-### Modify CPUa and memory request/limits (Kubernetes Resource API)
+### Modify CPUs and memory request/limits (Kubernetes Resource API)
 
-Modify file `./src/main/kubernetes/gke.yml` with desired limits
+Modify file `./src/main/kubernetes/jenkins.yml` with desired limits
 
 ```yaml
 resources:
@@ -437,3 +522,8 @@ Note: the JVM will use the memory `requests` as the heap limit (-Xmx)
 ## Building
 
     docker build -t csanchez/jenkins-kubernetes .
+
+# Related Projects
+
+* [Kubernetes Pipeline plugin](https://github.com/jenkinsci/kubernetes-pipeline-plugin): pipeline extension to provide native support for using Kubernetes pods, secrets and volumes to perform builds
+* [Kubernetes Secrets Credentials plugin](https://github.com/hoshsadiq/jenkins-kubernetes-secrets-credentials): Credentials provider that reads Kubernetes secrets

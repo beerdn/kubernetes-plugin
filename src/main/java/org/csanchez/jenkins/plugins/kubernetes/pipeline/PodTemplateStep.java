@@ -2,12 +2,15 @@ package org.csanchez.jenkins.plugins.kubernetes.pipeline;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang.StringUtils;
 import org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate;
 import org.csanchez.jenkins.plugins.kubernetes.PodAnnotation;
+import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
+import org.csanchez.jenkins.plugins.kubernetes.model.TemplateEnvVar;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.PodVolume;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.workspace.WorkspaceVolume;
 import org.jenkinsci.plugins.workflow.steps.Step;
@@ -38,12 +41,16 @@ public class PodTemplateStep extends Step implements Serializable {
 
     private String namespace;
     private List<ContainerTemplate> containers = new ArrayList<>();
+    private List<TemplateEnvVar> envVars = new ArrayList<>();
     private List<PodVolume> volumes = new ArrayList<PodVolume>();
     private WorkspaceVolume workspaceVolume;
     private List<PodAnnotation> annotations = new ArrayList<>();
+    private List<String> imagePullSecrets = new ArrayList<>();
 
-    private int instanceCap;
+    private int instanceCap = Integer.MAX_VALUE;
     private int idleMinutes;
+    private int slaveConnectTimeout = PodTemplate.DEFAULT_SLAVE_JENKINS_CONNECTION_TIMEOUT;
+    private int activeDeadlineSeconds;
 
     private String serviceAccount;
     private String nodeSelector;
@@ -100,6 +107,18 @@ public class PodTemplateStep extends Step implements Serializable {
         this.containers = containers;
     }
 
+    public List<TemplateEnvVar> getEnvVars() {
+        return envVars == null ? Collections.emptyList() : envVars;
+    }
+
+    @DataBoundSetter
+    public void setEnvVars(List<TemplateEnvVar> envVars) {
+        if (envVars != null) {
+            this.envVars.clear();
+            this.envVars.addAll(envVars);
+        }
+    }
+
     public List<PodVolume> getVolumes() {
         return volumes;
     }
@@ -136,9 +155,25 @@ public class PodTemplateStep extends Step implements Serializable {
         this.idleMinutes = idleMinutes;
     }
 
-    public String getServiceAccount() {
-        return serviceAccount;
+    public int getSlaveConnectTimeout() {
+        return slaveConnectTimeout;
     }
+
+    @DataBoundSetter
+    public void setSlaveConnectTimeout(int slaveConnectTimeout) {
+        this.slaveConnectTimeout = slaveConnectTimeout;
+    }
+
+    public int getActiveDeadlineSeconds() {
+        return activeDeadlineSeconds;
+    }
+
+    @DataBoundSetter
+    public void setActiveDeadlineSeconds(int activeDeadlineSeconds) {
+        this.activeDeadlineSeconds = activeDeadlineSeconds;
+    }
+
+    public String getServiceAccount() { return serviceAccount; }
 
     @DataBoundSetter
     public void setServiceAccount(String serviceAccount) {
@@ -190,6 +225,18 @@ public class PodTemplateStep extends Step implements Serializable {
     @DataBoundSetter
     public void setAnnotations(List<PodAnnotation> annotations) {
         this.annotations = annotations;
+    }
+
+    public List<String> getImagePullSecrets() {
+        return imagePullSecrets == null ? Collections.emptyList() : imagePullSecrets;
+    }
+
+    @DataBoundSetter
+    public void setImagePullSecrets(List<String> imagePullSecrets) {
+        if (imagePullSecrets != null) {
+            this.imagePullSecrets.clear();
+            this.imagePullSecrets.addAll(imagePullSecrets);
+        }
     }
 
     @Extension

@@ -1,6 +1,69 @@
 CHANGELOG
 =========
 
+1.1
+-----
+* Only allow tasks after all containers in pod are ready [#230](https://github.com/jenkinsci/kubernetes-plugin/pull/230)
+* Add activeDeadlineSeconds to Pod template [#221](https://github.com/jenkinsci/kubernetes-plugin/pull/221)
+* Default podTemplate slaveConnectTimeout to 100 [#235](https://github.com/jenkinsci/kubernetes-plugin/pull/235)
+* Allow overriding HOME env var and remove duplicated env vars [#224](https://github.com/jenkinsci/kubernetes-plugin/pull/224)
+* Rename jenkinsci/jnlp-slave -> jenkins/jnlp-slave and upgrade to 3.10-1 [#231](https://github.com/jenkinsci/kubernetes-plugin/pull/231)
+* Do not use a tty to prevent nohup.out from being created [JENKINS-46087](https://issues.jenkins-ci.org/browse/JENKINS-46085) [#212](https://github.com/jenkinsci/kubernetes-plugin/pull/222)
+* Pod annotations cannot contain duplicate keys when combining pod templates [#220](https://github.com/jenkinsci/kubernetes-plugin/pull/220)
+* Kubernetes agents not getting deleted in Jenkins after pods are deleted [JENKINS-35246](https://issues.jenkins-ci.org/browse/JENKINS-35246) [#217](https://github.com/jenkinsci/kubernetes-plugin/pull/217)
+* Remove unused JENKINS_JNLP_URL env var [#219](https://github.com/jenkinsci/kubernetes-plugin/pull/219)
+
+1.0
+-----
+
+* `containerLog` step to get the logs of a container running in the agent pod [JENKINS-46085](https://issues.jenkins-ci.org/browse/JENKINS-46085) [#195](https://github.com/jenkinsci/kubernetes-plugin/pull/195)
+* Autoconfigure cloud if kubernetes url is not set [#208](https://github.com/jenkinsci/kubernetes-plugin/pull/208)
+* Change containerCap and instanceCap 0 to mean do not use [JENKINS-45845](https://issues.jenkins-ci.org/browse/JENKINS-45845) [#199](https://github.com/jenkinsci/kubernetes-plugin/pull/199)
+* Add environment variables to container from a secret [JENKINS-39867](https://issues.jenkins-ci.org/browse/JENKINS-39867) [#162](https://github.com/jenkinsci/kubernetes-plugin/pull/162)
+ * Deprecate `containerEnvVar` for `envVar` and added `secretEnvVar`
+* Enable setting slaveConnectTimeout in podTemplate defined in pipeline [#213](https://github.com/jenkinsci/kubernetes-plugin/pull/213)
+* Read Jenkins URL from cloud configuration or `KUBERNETES_JENKINS_URL` env var [#216](https://github.com/jenkinsci/kubernetes-plugin/pull/216)
+* Make `withEnv` work inside a container [JENKINS-46278](https://issues.jenkins-ci.org/browse/JENKINS-46278) [#204](https://github.com/jenkinsci/kubernetes-plugin/pull/204)
+* Close resource leak, fix broken pipe error. Make number of concurrent requests to Kubernetes configurable [JENKINS-40825](https://issues.jenkins-ci.org/browse/JENKINS-40825) [#182](https://github.com/jenkinsci/kubernetes-plugin/pull/182)
+* Delete pods in the cloud namespace when pod namespace is not defined [JENKINS-45910](https://issues.jenkins-ci.org/browse/JENKINS-45910) [#192](https://github.com/jenkinsci/kubernetes-plugin/pull/192)
+* Use `Util.replaceMacro` instead of our custom replacement logic. Behavior change: when a var is not defined it is not replaced, ie. `${key1} or ${key2} or ${key3}` -> `value1 or value2 or ${key3}` [#198](https://github.com/jenkinsci/kubernetes-plugin/pull/198)
+* Allow to create non-configurable instances programmatically [#191](https://github.com/jenkinsci/kubernetes-plugin/pull/191)
+* Do not cache kubernetes connection to reflect config changes and credential expiration [JENKINS-39867](https://issues.jenkins-ci.org/browse/JENKINS-39867) [#189](https://github.com/jenkinsci/kubernetes-plugin/pull/189)
+* Inherit podAnnotations when inheriting pod templates [#209](https://github.com/jenkinsci/kubernetes-plugin/pull/209)
+* Remove unneeded plugin dependencies, make pipeline-model-extensions optional [#214](https://github.com/jenkinsci/kubernetes-plugin/pull/214)
+
+0.12
+-----
+
+* Add an experimental Declarative Agent extension for Kubernetes [JENKINS-41758](https://issues.jenkins-ci.org/browse/JENKINS-41758) [#127](https://github.com/jenkinsci/kubernetes-plugin/pull/127)
+* Implement Port mapping [#165](https://github.com/jenkinsci/kubernetes-plugin/pull/165)
+* Support idleMinutes field in pipeline [#154](https://github.com/jenkinsci/kubernetes-plugin/pull/154)
+* Add command liveness probe support [#158](https://github.com/jenkinsci/kubernetes-plugin/pull/158)
+* Add toggle for node usage mode [#158](https://github.com/jenkinsci/kubernetes-plugin/pull/158)
+* Add namespace support on PodTemplate.
+* Make PodTemplate optional within pipeline [JENKINS-42315](https://issues.jenkins-ci.org/browse/JENKINS-42315)
+* Make Slave Jenkins connection timeout configurable [#141](https://github.com/jenkinsci/kubernetes-plugin/pull/141)
+* Fix durable pipeline PID NumberFormatException [JENKINS-42048](https://issues.jenkins-ci.org/browse/JENKINS-42048) [#157](https://github.com/jenkinsci/kubernetes-plugin/pull/157)
+* Don't provision nodes if there are no PodTemplates set to usage mode Normal [#171](https://github.com/jenkinsci/kubernetes-plugin/pull/171)
+* Refactoring add/set methods in PodTemplate [#173](https://github.com/jenkinsci/kubernetes-plugin/pull/173)
+* Delete the build pod after we have finished with the template block [#172](https://github.com/jenkinsci/kubernetes-plugin/pull/172)
+* Default to use the kubernetes.default.svc.cluster.local endpoint
+* Do not print stack trace on ConnectException
+* Upgrade kubernetes client to 2.3.1 [JENKINS-44189](https://issues.jenkins-ci.org/browse/JENKINS-42048)
+* Step namespace should have priority over anything else [#161](https://github.com/jenkinsci/kubernetes-plugin/pull/161)
+* Wait for pod to exist up to 60 seconds before erroring [#155](https://github.com/jenkinsci/kubernetes-plugin/pull/155)
+* Catch IOException on ContainerExecProc#kill
+* Do not print stack trace on connection exception
+* Restore random naming for pipeline managed pod templates.
+* Dir context is not honored by shell step [JENKINS-40925](https://issues.jenkins-ci.org/browse/JENKINS-40925) [#146](https://github.com/jenkinsci/kubernetes-plugin/pull/146)
+* Limit pod name to 63 characters, and change the randomly generated string [#143](https://github.com/jenkinsci/kubernetes-plugin/pull/143)
+* Fix workingDir inheritance error [#136](https://github.com/jenkinsci/kubernetes-plugin/pull/136)
+* Use name instead of label for the nesting stack [#137](https://github.com/jenkinsci/kubernetes-plugin/pull/137)
+* Exception in configure page when 'Kubernetes URL' isn't filled [JENKINS-45282](https://issues.jenkins-ci.org/browse/JENKINS-45282) [#174](https://github.com/jenkinsci/kubernetes-plugin/pull/174)
+* kubectl temporary config file should work where Jenkins project contains spaces [#178](https://github.com/jenkinsci/kubernetes-plugin/pull/178)
+* Thread/connection leak [#177](https://github.com/jenkinsci/kubernetes-plugin/pull/177)
+
+
 0.11
 -----
 

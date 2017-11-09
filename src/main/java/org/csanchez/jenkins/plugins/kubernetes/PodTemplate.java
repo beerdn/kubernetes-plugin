@@ -1,7 +1,5 @@
 package org.csanchez.jenkins.plugins.kubernetes;
 
-import hudson.tools.ToolLocationNodeProperty;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,10 +12,11 @@ import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 
 import org.apache.commons.lang.StringUtils;
+import org.csanchez.jenkins.plugins.kubernetes.model.TemplateEnvVar;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.PodVolume;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.workspace.WorkspaceVolume;
 import org.kohsuke.accmod.Restricted;
-import org.kohsuke.accmod.restrictions.DoNotUse;
+import org.kohsuke.accmod.restrictions.NoExternalUse;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -28,8 +27,9 @@ import hudson.Util;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
 import hudson.model.Label;
-import hudson.model.labels.LabelAtom;
 import hudson.model.Node;
+import hudson.model.labels.LabelAtom;
+import hudson.tools.ToolLocationNodeProperty;
 
 /**
  * Kubernetes Pod Template
@@ -44,7 +44,7 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
 
     private static final Logger LOGGER = Logger.getLogger(PodTemplate.class.getName());
 
-    private static final int DEFAULT_SLAVE_JENKINS_CONNECTION_TIMEOUT = 100;
+    public static final int DEFAULT_SLAVE_JENKINS_CONNECTION_TIMEOUT = 100;
 
     private String inheritFrom;
 
@@ -70,6 +70,8 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
 
     private int idleMinutes;
 
+    private int activeDeadlineSeconds;
+
     private String label;
 
     private String serviceAccount;
@@ -93,11 +95,11 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
 
     private List<ContainerTemplate> containers = new ArrayList<ContainerTemplate>();
 
-    private final List<PodEnvVar> envVars = new ArrayList<PodEnvVar>();
+    private List<TemplateEnvVar> envVars = new ArrayList<>();
 
     private List<PodAnnotation> annotations = new ArrayList<PodAnnotation>();
 
-    private final List<PodImagePullSecret> imagePullSecrets = new ArrayList<PodImagePullSecret>();
+    private List<PodImagePullSecret> imagePullSecrets = new ArrayList<PodImagePullSecret>();
 
     private transient List<ToolLocationNodeProperty> nodeProperties;
 
@@ -118,6 +120,7 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
         this.setNodeUsageMode(from.getNodeUsageMode());
         this.setServiceAccount(from.getServiceAccount());
         this.setSlaveConnectTimeout(from.getSlaveConnectTimeout());
+        this.setActiveDeadlineSeconds(from.getActiveDeadlineSeconds());
         this.setVolumes(from.getVolumes());
         this.setWorkspaceVolume(from.getWorkspaceVolume());
     }
@@ -135,7 +138,7 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
         }
     }
 
-    @Restricted(DoNotUse.class) // testing only
+    @Restricted(NoExternalUse.class) // testing only
     PodTemplate(String name, List<? extends PodVolume> volumes, List<? extends ContainerTemplate> containers) {
         this.name = name;
         this.volumes.addAll(volumes);
@@ -216,7 +219,7 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
     }
 
     public void setInstanceCap(int instanceCap) {
-        if (instanceCap <= 0) {
+        if (instanceCap < 0) {
             this.instanceCap = Integer.MAX_VALUE;
         } else {
             this.instanceCap = instanceCap;
@@ -282,6 +285,14 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
         return idleMinutes;
     }
 
+    public void setActiveDeadlineSeconds(int i) {
+        this.activeDeadlineSeconds = i;
+    }
+
+    public int getActiveDeadlineSeconds() {
+        return activeDeadlineSeconds;
+    }
+
     @DataBoundSetter
     public void setIdleMinutesStr(String idleMinutes) {
         if (StringUtils.isBlank(idleMinutes)) {
@@ -296,6 +307,23 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
             return "";
         } else {
             return String.valueOf(idleMinutes);
+        }
+    }
+
+    @DataBoundSetter
+    public void setActiveDeadlineSecondsStr(String activeDeadlineSeconds) {
+        if (StringUtils.isBlank(activeDeadlineSeconds)) {
+            setActiveDeadlineSeconds(0);
+        } else {
+            setActiveDeadlineSeconds(Integer.parseInt(activeDeadlineSeconds));
+        }
+    }
+
+    public String getActiveDeadlineSecondsStr() {
+        if (getActiveDeadlineSeconds() == 0) {
+            return "";
+        } else {
+            return String.valueOf(activeDeadlineSeconds);
         }
     }
 
@@ -367,22 +395,21 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
         return getFirstContainer().map(ContainerTemplate::isAlwaysPullImage).orElse(false);
     }
 
-    public List<PodEnvVar> getEnvVars() {
+    public List<TemplateEnvVar> getEnvVars() {
         if (envVars == null) {
             return Collections.emptyList();
         }
         return envVars;
     }
 
-    @DataBoundSetter
-    public void addEnvVars(List<PodEnvVar> envVars) {
+    public void addEnvVars(List<TemplateEnvVar> envVars) {
         if (envVars != null) {
             this.envVars.addAll(envVars);
         }
     }
 
     @DataBoundSetter
-    public void setEnvVars(List<PodEnvVar> envVars) {
+    public void setEnvVars(List<TemplateEnvVar> envVars) {
         if (envVars != null) {
             this.envVars.clear();
             this.addEnvVars(envVars);
@@ -396,7 +423,6 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
         return annotations;
     }
 
-    @DataBoundSetter
     public void addAnnotations(List<PodAnnotation> annotations) {
         this.annotations.addAll(annotations);
     }
@@ -411,16 +437,29 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
     }
 
 
-    public List<PodImagePullSecret> getImagePullSecrets() {
-        if (imagePullSecrets == null) {
-            return Collections.emptyList();
+    @DataBoundSetter
+    public void setAnnotations(List<PodAnnotation> annotations) {
+        if (annotations != null) {
+            this.annotations = new ArrayList<PodAnnotation>();
+            this.addAnnotations(annotations);
         }
-        return imagePullSecrets;
+    }
+
+
+    public List<PodImagePullSecret> getImagePullSecrets() {
+        return imagePullSecrets == null ? Collections.emptyList() : imagePullSecrets;
+    }
+
+    public void addImagePullSecrets(List<PodImagePullSecret> imagePullSecrets) {
+        this.imagePullSecrets.addAll(imagePullSecrets);
     }
 
     @DataBoundSetter
-    public void addImagePullSecrets(List<PodImagePullSecret> imagePullSecrets) {
-        this.imagePullSecrets.addAll(imagePullSecrets);
+    public void setImagePullSecrets(List<PodImagePullSecret> imagePullSecrets) {
+        if (imagePullSecrets != null) {
+            this.imagePullSecrets.clear();
+            this.addImagePullSecrets(imagePullSecrets);
+        }
     }
 
         @DataBoundSetter
@@ -542,13 +581,13 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
     protected Object readResolve() {
         if (containers == null) {
             // upgrading from 0.8
-            containers = new ArrayList<ContainerTemplate>();
+            containers = new ArrayList<>();
             ContainerTemplate containerTemplate = new ContainerTemplate(KubernetesCloud.JNLP_NAME, this.image);
             containerTemplate.setCommand(command);
             containerTemplate.setArgs(Strings.isNullOrEmpty(args) ? FALLBACK_ARGUMENTS : args);
             containerTemplate.setPrivileged(privileged);
             containerTemplate.setAlwaysPullImage(alwaysPullImage);
-            containerTemplate.setEnvVars(PodEnvVar.asContainerEnvVar(envVars));
+            containerTemplate.setEnvVars(envVars);
             containerTemplate.setResourceRequestMemory(resourceRequestMemory);
             containerTemplate.setResourceLimitCpu(resourceLimitCpu);
             containerTemplate.setResourceLimitMemory(resourceLimitMemory);

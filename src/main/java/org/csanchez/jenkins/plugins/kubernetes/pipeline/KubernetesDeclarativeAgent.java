@@ -1,11 +1,11 @@
 package org.csanchez.jenkins.plugins.kubernetes.pipeline;
 
-import hudson.Extension;
 import org.apache.commons.lang.StringUtils;
 import org.csanchez.jenkins.plugins.kubernetes.ContainerTemplate;
 import org.jenkinsci.Symbol;
 import org.jenkinsci.plugins.pipeline.modeldefinition.agent.DeclarativeAgent;
 import org.jenkinsci.plugins.pipeline.modeldefinition.agent.DeclarativeAgentDescriptor;
+import org.jenkinsci.plugins.variant.OptionalExtension;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
@@ -23,6 +23,7 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
     private String serviceAccount;
     private String nodeSelector;
     private String workingDir;
+    private int activeDeadlineSeconds;
 
     private ContainerTemplate containerTemplate;
 
@@ -95,6 +96,13 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
         return containerTemplate;
     }
 
+    public int getActiveDeadlineSeconds() {
+        return activeDeadlineSeconds;
+    }
+
+    @DataBoundSetter
+    public void setActiveDeadlineSeconds(int activeDeadlineSeconds) { this.activeDeadlineSeconds = activeDeadlineSeconds; }
+
     public Map<String,Object> getAsArgs() {
         Map<String,Object> argMap = new TreeMap<>();
 
@@ -117,6 +125,10 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
         if (!StringUtils.isEmpty(workingDir)) {
             argMap.put("workingDir", workingDir);
         }
+        if (activeDeadlineSeconds != 0) {
+            argMap.put("activeDeadlineSeconds", activeDeadlineSeconds);
+        }
+
         if (instanceCap > 0) {
             argMap.put("instanceCap", instanceCap);
         }
@@ -124,7 +136,7 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
         return argMap;
     }
 
-    @Extension @Symbol("kubernetes")
+    @OptionalExtension(requirePlugins = "pipeline-model-extensions") @Symbol("kubernetes")
     public static class DescriptorImpl extends DeclarativeAgentDescriptor<KubernetesDeclarativeAgent> {
     }
 }
