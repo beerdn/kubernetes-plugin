@@ -375,9 +375,17 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
     }
 
     @DataBoundSetter
-    public void setEnvVars(List<PodEnvVar> envVars) {
+    public void addEnvVars(List<PodEnvVar> envVars) {
         if (envVars != null) {
             this.envVars.addAll(envVars);
+        }
+    }
+
+    @DataBoundSetter
+    public void setEnvVars(List<PodEnvVar> envVars) {
+        if (envVars != null) {
+            this.envVars.clear();
+            this.addEnvVars(envVars);
         }
     }
 
@@ -389,9 +397,19 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
     }
 
     @DataBoundSetter
-    public void setAnnotations(List<PodAnnotation> annotations) {
+    public void addAnnotations(List<PodAnnotation> annotations) {
         this.annotations.addAll(annotations);
     }
+
+
+    @DataBoundSetter
+    public void setAnnotations(List<PodAnnotation> annotations) {
+        if (annotations != null) {
+            this.annotations = new ArrayList<PodAnnotation>();
+            this.addAnnotations(annotations);
+        }
+    }
+
 
     public List<PodImagePullSecret> getImagePullSecrets() {
         if (imagePullSecrets == null) {
@@ -401,8 +419,16 @@ public class PodTemplate extends AbstractDescribableImpl<PodTemplate> implements
     }
 
     @DataBoundSetter
-    public void setImagePullSecrets(List<PodImagePullSecret> imagePullSecrets) {
+    public void addImagePullSecrets(List<PodImagePullSecret> imagePullSecrets) {
         this.imagePullSecrets.addAll(imagePullSecrets);
+    }
+
+        @DataBoundSetter
+    public void setImagePullSecrets(List<PodImagePullSecret> imagePullSecrets) {
+        if(imagePullSecrets != null) {
+            this.imagePullSecrets.clear();
+            this.addImagePullSecrets(imagePullSecrets);
+        }
     }
 
     @DataBoundSetter

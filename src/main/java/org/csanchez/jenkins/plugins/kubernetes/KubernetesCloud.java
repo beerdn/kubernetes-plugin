@@ -303,7 +303,7 @@ public class KubernetesCloud extends Cloud {
     public KubernetesClient connect() throws UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException,
             IOException, CertificateEncodingException {
 
-        LOGGER.log(Level.FINE, "Building connection to Kubernetes host " + name + " URL " + serverUrl);
+        LOGGER.log(Level.FINE, "Building connection to Kubernetes host " + getDisplayName() + " URL " + serverUrl);
 
         if (client == null) {
             synchronized (this) {
@@ -845,7 +845,7 @@ public class KubernetesCloud extends Cloud {
     public ArrayList<PodTemplate> getMatchingTemplates(@CheckForNull Label label) {
         ArrayList<PodTemplate> podList = new ArrayList<PodTemplate>();
         for (PodTemplate t : templates) {
-            if (label == null || label.matches(t.getLabelSet())) {
+            if ((label == null && t.getNodeUsageMode() == Node.Mode.NORMAL) || (label != null && label.matches(t.getLabelSet()))) {
                 podList.add(t);
             }
         }
