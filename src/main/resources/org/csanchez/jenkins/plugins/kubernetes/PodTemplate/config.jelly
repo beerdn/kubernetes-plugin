@@ -78,7 +78,7 @@
 
 
     <f:entry field="nodeSelector" title="${%Node Selector}">
-      <f:textbox/>
+      <f:textbox default="app=nodeSelector_is_required" />
     </f:entry>
 
     <f:descriptorList title="${%Node Properties}" descriptors="${h.getNodePropertyDescriptors(descriptor.clazz)}" field="nodeProperties" />

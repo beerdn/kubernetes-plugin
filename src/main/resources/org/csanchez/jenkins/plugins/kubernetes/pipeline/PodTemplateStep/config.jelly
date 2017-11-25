@@ -47,7 +47,7 @@
           <f:textbox/>
         </f:entry>
         <f:entry field="nodeSelector" title="The node selector">
-          <f:textbox/>
+          <f:textbox default="app=nodeSelector_is_required" />
         </f:entry>
         <f:entry field="workingDir" title="${%Working directory}">
           <f:textbox default="/home/jenkins"/>
