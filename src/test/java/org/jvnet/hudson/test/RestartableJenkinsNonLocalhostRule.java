@@ -1,7 +1,7 @@
 /*
  * The MIT License
  *
- * Copyright (c) 2017, CloudBees, Inc.
+ * Copyright (c) 2017, Red Hat, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -22,29 +22,23 @@
  * THE SOFTWARE.
  */
 
-package org.csanchez.jenkins.plugins.kubernetes.pipeline;
+package org.jvnet.hudson.test;
 
-import static org.junit.Assert.*;
+import org.junit.runner.Description;
 
-import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
-import org.jenkinsci.plugins.workflow.job.WorkflowJob;
-import org.jenkinsci.plugins.workflow.job.WorkflowRun;
-import org.junit.Test;
-import org.jvnet.hudson.test.Issue;
+/**
+ * @author Scott Hebert
+ *
+ */
+public class RestartableJenkinsNonLocalhostRule extends RestartableJenkinsRule {
+    private final int port;
 
-public class KubernetesDeclarativeAgentTest extends AbstractKubernetesPipelineTest {
-
-    @Issue("JENKINS-41758")
-    @Test
-    public void declarative() throws Exception {
-        WorkflowJob p = r.jenkins.createProject(WorkflowJob.class, "job with dir");
-        p.setDefinition(new CpsFlowDefinition(loadPipelineScript("declarative.groovy"), true));
-        WorkflowRun b = p.scheduleBuild2(0).waitForStart();
-        assertNotNull(b);
-        r.assertBuildStatusSuccess(r.waitForCompletion(b));
-        r.assertLogContains("Apache Maven 3.3.9", b);
-        r.assertLogContains("INSIDE_CONTAINER_ENV_VAR = " + CONTAINER_ENV_VAR_VALUE + "\n", b);
-        r.assertLogContains("OUTSIDE_CONTAINER_ENV_VAR = " + CONTAINER_ENV_VAR_VALUE + "\n", b);
+    public RestartableJenkinsNonLocalhostRule(int port) {
+        this.port = port;
     }
 
+    @Override
+    protected JenkinsRule createJenkinsRule(Description description) {
+        return new JenkinsRuleNonLocalhost(port);
+    }
 }

@@ -1,6 +1,40 @@
 CHANGELOG
 =========
 
+1.2
+-----
+* Move PodTemplate -> Pod conversion to PodTemplateBuilder [#276](https://github.com/jenkinsci/kubernetes-plugin/pull/276)
+* Split credentials classes into new plugin [kubernetes-credentials](https://github.com/jenkinsci/kubernetes-credentials-plugin)  [#268](https://github.com/jenkinsci/kubernetes-plugin/pull/268)
+
+1.1.4
+-----
+* Store definition of dynamic templates to a separate configuration than Kubernetes cloud [JENKINS-49166](https://issues.jenkins-ci.org/browse/JENKINS-49166) [#279](https://github.com/jenkinsci/kubernetes-plugin/pull/279)
+  * This can cause some side effects on the order the templates are picked, see
+    * [JENKINS-49366](https://issues.jenkins-ci.org/browse/JENKINS-49366) Nested podTemplate stopped working in 1.1.4
+    * [JENKINS-49313](https://issues.jenkins-ci.org/browse/JENKINS-49313) Incorrect podTemplate deployed starting in 1.1.4
+* Prevent unneeded exec operations [#239](https://github.com/jenkinsci/kubernetes-plugin/pull/239)
+
+1.1.3
+-----
+* Fix UI support of environment variables [JENKINS-47112](https://issues.jenkins-ci.org/browse/JENKINS-47112) [#273](https://github.com/jenkinsci/kubernetes-plugin/pull/273)
+* Missing call to `slave.terminate()` [#256](https://github.com/jenkinsci/kubernetes-plugin/pull/256)
+* Rename slave -> agent [#258](https://github.com/jenkinsci/kubernetes-plugin/pull/258)
+* Add new line when logging the agent in Jenkins [#267](https://github.com/jenkinsci/kubernetes-plugin/pull/267)
+
+1.1.2
+-----
+* Namespace is erroneously autodetected as 'default' [#261](https://github.com/jenkinsci/kubernetes-plugin/pull/261)
+* Do not require 2.89 for installation, revert to 2.32.1 [#263](https://github.com/jenkinsci/kubernetes-plugin/pull/263)
+* IllegalStateException at hudson.XmlFile.replaceIfNotAtTopLevel [JENKINS-45892](https://issues.jenkins-ci.org/browse/JENKINS-45892) [#257](https://github.com/jenkinsci/kubernetes-plugin/pull/257)
+
+1.1.1
+-----
+* Fix agent reconnection after master restart [JENKINS-47476](https://issues.jenkins-ci.org/browse/JENKINS-47476) [#244](https://github.com/jenkinsci/kubernetes-plugin/pull/244)
+* Wait 5s for complete disconnection of agents to avoid stack trace [#248](https://github.com/jenkinsci/kubernetes-plugin/pull/248)
+* If namespace is not provided nor autoconfigured should use `default` [#234](https://github.com/jenkinsci/kubernetes-plugin/pull/234)
+* Kubernetes plugin not using cmd proc variables, affecting `sshagent` step [JENKINS-47225](https://issues.jenkins-ci.org/browse/JENKINS-47225)[#236](https://github.com/jenkinsci/kubernetes-plugin/pull/236)
+* Escape quotes in environment variables [JENKINS-46670](https://issues.jenkins-ci.org/browse/JENKINS-46670)[#218](https://github.com/jenkinsci/kubernetes-plugin/pull/218)
+
 1.1
 -----
 * Only allow tasks after all containers in pod are ready [#230](https://github.com/jenkinsci/kubernetes-plugin/pull/230)

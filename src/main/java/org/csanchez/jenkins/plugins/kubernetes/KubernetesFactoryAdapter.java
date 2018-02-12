@@ -34,6 +34,8 @@ import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.DefaultKubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import jenkins.model.Jenkins;
+import org.jenkinsci.plugins.kubernetes.credentials.TokenProducer;
+import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
 /**
  * @author <a href="mailto:nicolas.deloof@gmail.com">Nicolas De Loof</a>
@@ -75,7 +77,7 @@ public class KubernetesFactoryAdapter {
     public KubernetesFactoryAdapter(String serviceAddress, String namespace, @CheckForNull String caCertData,
                                     @CheckForNull String credentials, boolean skipTlsVerify, int connectTimeout, int readTimeout, int maxRequestsPerHost) {
         this.serviceAddress = serviceAddress;
-        this.namespace = StringUtils.isBlank(namespace) ? "default" : namespace;
+        this.namespace = namespace;
         this.caCertData = caCertData;
         this.credentials = credentials != null ? getCredentials(credentials) : null;
         this.skipTlsVerify = skipTlsVerify;
@@ -112,8 +114,14 @@ public class KubernetesFactoryAdapter {
 
         if (!StringUtils.isBlank(namespace)) {
             builder.withNamespace(namespace);
+        } else if (StringUtils.isBlank(builder.getNamespace())) {
+            builder.withNamespace("default");
         }
-        if (credentials instanceof TokenProducer) {
+
+        if (credentials instanceof StringCredentials) {
+            final String token = ((StringCredentials) credentials).getSecret().getPlainText();
+            builder.withOauthToken(token);
+        } else if (credentials instanceof TokenProducer) {
             final String token = ((TokenProducer) credentials).getToken(serviceAddress, caCertData, skipTlsVerify);
             builder.withOauthToken(token);
         } else if (credentials instanceof UsernamePasswordCredentials) {
