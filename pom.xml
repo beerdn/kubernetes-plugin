@@ -248,7 +248,7 @@
             at com.fasterxml.jackson.databind.ObjectMapper.<init>(ObjectMapper.java:460)
             at io.fabric8.kubernetes.client.utils.Serialization.<clinit>(Serialization.java:37)
           -->
-          <pluginFirstClassLoader>false</pluginFirstClassLoader>
+          <pluginFirstClassLoader>true</pluginFirstClassLoader>
           <systemProperties>
             <hudson.slaves.NodeProvisioner.initialDelay>0</hudson.slaves.NodeProvisioner.initialDelay>
             <hudson.slaves.NodeProvisioner.MARGIN>50</hudson.slaves.NodeProvisioner.MARGIN>
