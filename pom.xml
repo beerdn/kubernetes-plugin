@@ -8,17 +8,17 @@
 
   <groupId>org.csanchez.jenkins.plugins</groupId>
   <artifactId>kubernetes</artifactId>
-  <version>1.2</version>
+  <version>1.7.1</version>
   <name>Kubernetes plugin</name>
-  <description>Jenkins plugin to run dynamic slaves in a Kubernetes/Docker environment</description>
+  <description>Jenkins plugin to run dynamic agents in a Kubernetes cluster</description>
   <packaging>hpi</packaging>
   <url>https://wiki.jenkins-ci.org/display/JENKINS/Kubernetes+Plugin</url>
 
   <scm>
-    <connection>scm:git:ssh://github.com/jenkinsci/kubernetes-plugin.git</connection>
+    <connection>scm:git:ssh://git@github.com/jenkinsci/kubernetes-plugin.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/jenkinsci/kubernetes-plugin.git</developerConnection>
     <url>https://github.com/jenkinsci/kubernetes-plugin</url>
-    <tag>HEAD</tag>
+    <tag>kubernetes-1.7.1</tag>
   </scm>
 
   <licenses>
@@ -44,15 +44,14 @@
     <java.level>8</java.level>
 
     <!-- dependency versions -->
-    <httpclient.version>4.5.1</httpclient.version>
-    <jackson.version>2.5.0</jackson.version>
     <jenkins.version>2.32.1</jenkins.version>
 
-    <kubernetes-client.version>2.6.1</kubernetes-client.version>
+    <kubernetes-client.version>3.1.10</kubernetes-client.version>
 
     <!-- jenkins plugins versions -->
     <jenkins-basic-steps.version>2.3</jenkins-basic-steps.version>
-    <jenkins-credentials.version>2.1.7</jenkins-credentials.version>
+    <jenkins-credentials.version>2.1.11</jenkins-credentials.version>
+    <jenkins-kubernetes-credentials.version>0.3.0</jenkins-kubernetes-credentials.version>
     <jenkins-durable-task.version>1.16</jenkins-durable-task.version>
     <jenkins-durable-task-step.version>2.11</jenkins-durable-task-step.version>
     <jenkins-structs.version>1.6</jenkins-structs.version>
@@ -66,6 +65,7 @@
     <jenkins-declarative.version>1.1.2</jenkins-declarative.version>
     <jenkins-script-security.version>1.26</jenkins-script-security.version>
 
+    <no-test-jar>false</no-test-jar>
   </properties>
 
   <dependencies>
@@ -73,19 +73,34 @@
       <groupId>io.fabric8</groupId>
       <artifactId>kubernetes-client</artifactId>
       <version>${kubernetes-client.version}</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-      <version>${httpclient.version}</version>
+      <exclusions>
+        <!-- Jackson logic comes from plugins -->
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>com.fasterxml.jackson.core</groupId>
+          <artifactId>jackson-databind</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- required plugins -->
     <dependency>
       <groupId>org.jenkins-ci.plugins</groupId>
-      <artifactId>credentials</artifactId>
-      <version>${jenkins-credentials.version}</version>
+      <artifactId>jackson2-api</artifactId>
+      <version>2.7.3</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>apache-httpcomponents-client-4-api</artifactId>
+      <version>4.5.3-2.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jenkinsci.plugins</groupId>
+      <artifactId>kubernetes-credentials</artifactId>
+      <version>${jenkins-kubernetes-credentials.version}</version>
     </dependency>
 
     <dependency> <!-- OnceRetentionStrategy -->
@@ -179,6 +194,12 @@
       <version>${jenkins-workflow-cps.version}</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>2.9.0</version>
+      <scope>test</scope>
+    </dependency>
 
     <!-- for ContainerExecDecoratorPipelineTest -->
     <dependency>
@@ -193,11 +214,28 @@
       <version>2.16.2</version>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.jenkins-ci.plugins</groupId>
+      <artifactId>docker-workflow</artifactId>
+      <version>1.15</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
-  <!-- just to fix enforcer RequireUpperBoundDeps -->
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>org.jenkins-ci.plugins</groupId>
+        <artifactId>credentials</artifactId>
+        <version>${jenkins-credentials.version}</version>
+      </dependency>
+
+      <!-- just to fix enforcer RequireUpperBoundDeps -->
+      <dependency>
+        <groupId>org.jenkins-ci.plugins</groupId>
+        <artifactId>credentials-binding</artifactId>
+        <version>1.12</version>
+      </dependency>
       <dependency>
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>structs</artifactId>
@@ -207,6 +245,11 @@
         <groupId>org.jenkins-ci.plugins</groupId>
         <artifactId>ssh-credentials</artifactId>
         <version>1.12</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.sshd</groupId>
+        <artifactId>sshd-core</artifactId>
+        <version>1.6.0</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
@@ -219,6 +262,8 @@
         <configuration>
           <systemPropertyVariables>
             <hudson.slaves.NodeProvisioner.initialDelay>0</hudson.slaves.NodeProvisioner.initialDelay>
+            <hudson.slaves.NodeProvisioner.MARGIN>50</hudson.slaves.NodeProvisioner.MARGIN>
+            <hudson.slaves.NodeProvisioner.MARGIN0>0.85</hudson.slaves.NodeProvisioner.MARGIN0>
             <!-- listen in this interface for connections from kubernetes pods -->
             <connectorHost>${connectorHost}</connectorHost>
           </systemPropertyVariables>
@@ -249,14 +294,14 @@
   <repositories>
     <repository>
       <id>repo.jenkins-ci.org</id>
-      <url>http://repo.jenkins-ci.org/public/</url>
+      <url>https://repo.jenkins-ci.org/public/</url>
     </repository>
   </repositories>
 
   <pluginRepositories>
     <pluginRepository>
       <id>repo.jenkins-ci.org</id>
-      <url>http://repo.jenkins-ci.org/public/</url>
+      <url>https://repo.jenkins-ci.org/public/</url>
     </pluginRepository>
   </pluginRepositories>
 
