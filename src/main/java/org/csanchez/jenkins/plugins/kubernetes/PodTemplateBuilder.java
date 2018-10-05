@@ -24,11 +24,9 @@
 
 package org.csanchez.jenkins.plugins.kubernetes;
 
-import static java.nio.charset.StandardCharsets.*;
 import static org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud.*;
 import static org.csanchez.jenkins.plugins.kubernetes.PodTemplateUtils.*;
 
-import java.io.ByteArrayInputStream;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -61,20 +59,16 @@ import io.fabric8.kubernetes.api.model.ContainerPort;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.ExecAction;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
-import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.PodFluent.MetadataNested;
 import io.fabric8.kubernetes.api.model.PodFluent.SpecNested;
-import io.fabric8.kubernetes.api.model.PodSpec;
 import io.fabric8.kubernetes.api.model.Probe;
 import io.fabric8.kubernetes.api.model.ProbeBuilder;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeBuilder;
 import io.fabric8.kubernetes.api.model.VolumeMount;
-import io.fabric8.kubernetes.client.DefaultKubernetesClient;
-import io.fabric8.kubernetes.client.KubernetesClient;
 
 /**
  * Helper class to build Pods from PodTemplates
@@ -130,7 +124,7 @@ public class PodTemplateBuilder {
         for (final PodVolume volume : template.getVolumes()) {
             final String volumeName = "volume-" + i;
             //We need to normalize the path or we can end up in really hard to debug issues.
-            final String mountPath = substituteEnv(Paths.get(volume.getMountPath()).normalize().toString());
+            final String mountPath = substituteEnv(Paths.get(volume.getMountPath()).normalize().toString().replace("\\", "/"));
             if (!volumeMounts.containsKey(mountPath)) {
                 volumeMounts.put(mountPath, new VolumeMount(mountPath, volumeName, false, null));
                 volumes.put(volumeName, volume.buildVolume(volumeName));
@@ -139,9 +133,12 @@ public class PodTemplateBuilder {
         }
 
         if (template.getWorkspaceVolume() != null) {
+            LOGGER.log(Level.FINE, "Adding workspace volume from template: {0}",
+                    template.getWorkspaceVolume().toString());
             volumes.put(WORKSPACE_VOLUME_NAME, template.getWorkspaceVolume().buildVolume(WORKSPACE_VOLUME_NAME));
         } else {
             // add an empty volume to share the workspace across the pod
+            LOGGER.log(Level.FINE, "Adding empty workspace volume");
             volumes.put(WORKSPACE_VOLUME_NAME, new VolumeBuilder().withName(WORKSPACE_VOLUME_NAME).withNewEmptyDir().endEmptyDir().build());
         }
 
@@ -201,19 +198,8 @@ public class PodTemplateBuilder {
         // merge with the yaml
         String yaml = template.getYaml();
         if (!StringUtils.isBlank(yaml)) {
-            try (KubernetesClient client = new DefaultKubernetesClient()) {
-                Pod podFromYaml = client.pods()
-                        .load(new ByteArrayInputStream((yaml == null ? "" : yaml).getBytes(UTF_8))).get();
-                LOGGER.log(Level.FINEST, "Parsed pod template from yaml: {0}", podFromYaml);
-                // yaml can be just a fragment, avoid NPEs
-                if (podFromYaml.getMetadata() == null) {
-                    podFromYaml.setMetadata(new ObjectMeta());
-                }
-                if (podFromYaml.getSpec() == null) {
-                    podFromYaml.setSpec(new PodSpec());
-                }
-                pod = combine(podFromYaml, pod);
-            }
+            Pod podFromYaml = parseFromYaml(yaml);
+            pod = combine(podFromYaml, pod);
         }
 
         // Apply defaults

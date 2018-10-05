@@ -41,6 +41,7 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
     private List<ContainerTemplate> containerTemplates;
     private String defaultContainer;
     private String yaml;
+    private String yamlFile;
 
     @DataBoundConstructor
     public KubernetesDeclarativeAgent() {
@@ -171,6 +172,15 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
     @DataBoundSetter
     public void setActiveDeadlineSeconds(int activeDeadlineSeconds) {
         this.activeDeadlineSeconds = activeDeadlineSeconds;
+    }
+
+    public String getYamlFile() {
+        return yamlFile;
+    }
+
+    @DataBoundSetter
+    public void setYamlFile(String yamlFile) {
+        this.yamlFile = yamlFile;
     }
 
     public Map<String, Object> getAsArgs() {

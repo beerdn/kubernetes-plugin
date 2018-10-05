@@ -34,6 +34,7 @@ import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.interceptor.RequirePOST;
 
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
@@ -42,6 +43,7 @@ import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.common.StandardListBoxModel;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.domains.URIRequirementBuilder;
+import com.ctc.wstx.util.StringUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
@@ -234,15 +236,13 @@ public class KubernetesCloud extends Cloud {
     	this.addMasterProxyEnvVars = addMasterProxyEnvVars;
     }
 
-    @Nonnull
     public String getNamespace() {
         return namespace;
     }
 
     @DataBoundSetter
-    public void setNamespace(@Nonnull String namespace) {
-        Preconditions.checkArgument(!StringUtils.isBlank(namespace));
-        this.namespace = namespace;
+    public void setNamespace(String namespace) {
+        this.namespace = Util.fixEmpty(namespace);
     }
 
     @CheckForNull
@@ -590,12 +590,14 @@ public class KubernetesCloud extends Cloud {
                     org.jenkinsci.plugins.kubernetes.credentials.FileSystemServiceAccountCredential.class);
         }
 
+        @RequirePOST
         public FormValidation doTestConnection(@QueryParameter String name, @QueryParameter String serverUrl, @QueryParameter String credentialsId,
                                                @QueryParameter String serverCertificate,
                                                @QueryParameter boolean skipTlsVerify,
                                                @QueryParameter String namespace,
                                                @QueryParameter int connectionTimeout,
                                                @QueryParameter int readTimeout) throws Exception {
+            Jenkins.get().checkPermission(Jenkins.ADMINISTER);
 
             if (StringUtils.isBlank(name))
                 return FormValidation.error("name is required");
@@ -619,7 +621,9 @@ public class KubernetesCloud extends Cloud {
             }
         }
 
+        @RequirePOST
         public ListBoxModel doFillCredentialsIdItems(@QueryParameter String serverUrl) {
+            Jenkins.get().checkPermission(Jenkins.ADMINISTER);
             return new StandardListBoxModel().withEmptySelection() //
                     .withMatching( //
                             CredentialsMatchers.anyOf(
@@ -639,6 +643,7 @@ public class KubernetesCloud extends Cloud {
 
         }
 
+        @RequirePOST
         public FormValidation doCheckMaxRequestsPerHostStr(@QueryParameter String value) throws IOException, ServletException {
             try {
                 Integer.parseInt(value);

@@ -29,10 +29,10 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.csanchez.jenkins.plugins.kubernetes.KubernetesCloud;
 import org.csanchez.jenkins.plugins.kubernetes.PodTemplate;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
@@ -75,10 +75,12 @@ public class KubernetesPipelineTest extends AbstractKubernetesPipelineTest {
             Thread.sleep(1000);
         }
 
-        PodList pods = cloud.connect().pods().withLabels(getLabels(cloud, this)).list();
+        Map<String, String> labels = getLabels(cloud, this);
+        LOGGER.log(Level.INFO, "Waiting for pods to be created with labels: {0}", labels);
+        PodList pods = cloud.connect().pods().withLabels(labels).list();
         while (pods.getItems().isEmpty()) {
-            LOGGER.log(Level.INFO, "Waiting for pod to be created");
-            pods = cloud.connect().pods().withLabels(getLabels(cloud, this)).list();
+            LOGGER.log(Level.INFO, "Waiting for pods to be created with labels: {0}", labels);
+            pods = cloud.connect().pods().withLabels(labels).list();
             Thread.sleep(1000);
         }
 
@@ -87,6 +89,7 @@ public class KubernetesPipelineTest extends AbstractKubernetesPipelineTest {
 
         assertEquals(1, pods.getItems().size());
         Pod pod = pods.getItems().get(0);
+        LOGGER.log(Level.INFO, "One pod found: {0}", pod);
         assertThat(pod.getMetadata().getLabels(), hasEntry("jenkins", "slave"));
         assertThat(pod.getMetadata().getLabels(), hasEntry("jenkins/mypod", "true"));
 
@@ -146,6 +149,19 @@ public class KubernetesPipelineTest extends AbstractKubernetesPipelineTest {
         r.assertLogContains("My Kubernetes Pipeline", b);
         r.assertLogContains("my-mount", b);
         r.assertLogContains("Apache Maven 3.3.9", b);
+    }
+
+    @Test
+    public void runInPodNested() throws Exception {
+        WorkflowJob p = r.jenkins.createProject(WorkflowJob.class, "p");
+        p.setDefinition(new CpsFlowDefinition(loadPipelineScript("runInPodNested.groovy"), true));
+        WorkflowRun b = p.scheduleBuild2(0).waitForStart();
+        assertNotNull(b);
+        r.assertBuildStatusSuccess(r.waitForCompletion(b));
+        r.assertLogContains("[maven] maven:3.3.9-jdk-8-alpine", b);
+        r.assertLogContains("[golang] golang:1.6.3-alpine", b);
+        r.assertLogContains("Apache Maven 3.3.9", b);
+        r.assertLogContains("go version go1.6.3", b);
     }
 
     @Test
@@ -282,7 +298,6 @@ public class KubernetesPipelineTest extends AbstractKubernetesPipelineTest {
         r.assertLogContains("initpwd is -" + workspace + "-", b);
         r.assertLogContains("dirpwd is -" + workspace + "/hz-", b);
         r.assertLogContains("postpwd is -" + workspace + "-", b);
-
     }
 
     @Test
