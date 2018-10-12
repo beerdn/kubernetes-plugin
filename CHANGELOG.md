@@ -3,9 +3,116 @@ CHANGELOG
 
 Known issues
 ------------
-* Nested pod templates and inheritance issues [JENKINS-50196](https://issues.jenkins-ci.org/browse/JENKINS-50196) [JENKINS-49700](https://issues.jenkins-ci.org/browse/JENKINS-49700) [JENKINS-49366](https://issues.jenkins-ci.org/browse/JENKINS-49366)
+* Nested pod templates and inheritance issues [JENKINS-49700](https://issues.jenkins-ci.org/browse/JENKINS-49700)
 
 See the full list of issues at [JIRA](https://issues.jenkins-ci.org/issues/?filter=15575)
+
+1.12.7
+------
+* Fix nested Pod Templates support [#382](https://github.com/jenkinsci/kubernetes-plugin/pull/382) [JENKINS-50196](https://issues.jenkins-ci.org/browse/JENKINS-50196)
+* Fix pod spec display in build logs [#384](https://github.com/jenkinsci/kubernetes-plugin/pull/384)
+
+1.12.6
+------
+
+* Container and instance cap are not honored when requesting lots of slaves [#374](https://github.com/jenkinsci/kubernetes-plugin/pull/374) [JENKINS-53313](https://issues.jenkins-ci.org/browse/JENKINS-53313)
+
+1.12.5
+------
+
+* Check for nulls in older kubernetes versions, fixes some NPEs in Kubernetes 1.5 [#378](https://github.com/jenkinsci/kubernetes-plugin/pull/378) [JENKINS-53370](https://issues.jenkins-ci.org/browse/JENKINS-53370)
+
+1.12.4
+------
+
+* Add volumes from pod template to JNLP container [#371](https://github.com/jenkinsci/kubernetes-plugin/pull/371) [JENKINS-50879](https://issues.jenkins-ci.org/browse/JENKINS-50879)
+* Chinese localization [#368](https://github.com/jenkinsci/kubernetes-plugin/pull/368)[#370](https://github.com/jenkinsci/kubernetes-plugin/pull/370)
+
+1.12.3
+------
+
+* Upgrade Jenkins to 2.121.2 [#365](https://github.com/jenkinsci/kubernetes-plugin/pull/365)
+
+1.12.2
+------
+
+* Using declarative, environment variables like COMMIT_ID, GIT_BRANCH are not populated. Use CheckoutScript to populate environment [#364](https://github.com/jenkinsci/kubernetes-plugin/pull/364) [JENKINS-52623](https://issues.jenkins-ci.org/browse/JENKINS-52623)
+
+1.12.1
+------
+
+* Upgrade kubernetes-client to 4.0.0. Drops support for OpenShift <1.6 [#358](https://github.com/jenkinsci/kubernetes-plugin/pull/358) [JENKINS-53363](https://issues.jenkins-ci.org/browse/JENKINS-53363)
+* Fix defaults for Pod Retention on Pod templates [#363](https://github.com/jenkinsci/kubernetes-plugin/pull/363) [JENKINS-48149](https://issues.jenkins-ci.org/browse/JENKINS-48149)
+
+1.12.0
+------
+
+* Add optional usage restriction for a Kubernetes cloud using folder properties [#282](https://github.com/jenkinsci/kubernetes-plugin/pull/282)
+
+1.11.0
+------
+
+* Add Pod Retention policies to keep pods around on failure [#354](https://github.com/jenkinsci/kubernetes-plugin/pull/354) [JENKINS-48149](https://issues.jenkins-ci.org/browse/JENKINS-48149)
+
+1.10.2
+------
+
+* Global configuration `testConnection` using GET allows stealing credentials + CSRF [SECURITY-1016](https://issues.jenkins-ci.org/browse/SECURITY-1016)
+
+1.10.1
+-------
+
+* Tool Location overwrites are not preserved [#318](https://github.com/jenkinsci/kubernetes-plugin/pull/318) [JENKINS-44285](https://issues.jenkins-ci.org/browse/JENKINS-44285)
+
+1.10.0
+-------
+
+* Add `yamlFile` option for Declarative agent to read yaml definition from a different file [#355](https://github.com/jenkinsci/kubernetes-plugin/pull/355) [JENKINS-52259](https://issues.jenkins-ci.org/browse/JENKINS-52259)
+
+1.9.3
+-----
+
+* Avoid streaming to 2 similar OutputStreams [#356](https://github.com/jenkinsci/kubernetes-plugin/pull/356)
+
+1.9.2
+-----
+
+* Combine all resources declared in requests and limits not just CPU and memory [#350](https://github.com/jenkinsci/kubernetes-plugin/pull/350)
+
+1.9.1
+-----
+
+* Jenkins master in windows changes the file separator of `mountPath` incorrectly [#308](https://github.com/jenkinsci/kubernetes-plugin/pull/308) [JENKINS-47178](https://issues.jenkins-ci.org/browse/JENKINS-47178)
+
+1.9.0
+-----
+
+* Update parent and Jenkins versions [#349](https://github.com/jenkinsci/kubernetes-plugin/pull/349)
+
+1.8.4
+-----
+
+* Fix mountPath error provisioning `mountPath: Required value` [#346](https://github.com/jenkinsci/kubernetes-plugin/pull/346) [JENKINS-50525](https://issues.jenkins-ci.org/browse/JENKINS-50525)
+
+1.8.3
+-----
+
+* Preserve unsupported directives in `PodTemplate` yaml, add explicit support for envFrom
+ [#348](https://github.com/jenkinsci/kubernetes-plugin/pull/348)
+
+1.8.2
+-----
+
+* Do not emit empty strings for resource requests/limits
+ [#342](https://github.com/jenkinsci/kubernetes-plugin/pull/342)
+
+1.8.1
+-----
+* Get the exit code the correct way. Solves problems with many pipeline steps that rely on tool outputs [#300](https://github.com/jenkinsci/kubernetes-plugin/pull/300) [JENKINS-50392](https://issues.jenkins-ci.org/browse/JENKINS-50392)
+
+1.8.0
+-----
+* Validate label and container names with regex [#332](https://github.com/jenkinsci/kubernetes-plugin/pull/332) [#343](https://github.com/jenkinsci/kubernetes-plugin/pull/343) [JENKINS-51248](https://issues.jenkins-ci.org/browse/JENKINS-51248)
 
 1.7.1
 -----

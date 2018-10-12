@@ -18,10 +18,13 @@ import org.kohsuke.stapler.DataBoundSetter;
 import com.google.common.base.Preconditions;
 
 import hudson.Extension;
+import hudson.Util;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
 import hudson.model.DescriptorVisibilityFilter;
+import hudson.util.FormValidation;
 import jenkins.model.Jenkins;
+import org.kohsuke.stapler.QueryParameter;
 
 public class ContainerTemplate extends AbstractDescribableImpl<ContainerTemplate> implements Serializable {
 
@@ -149,7 +152,7 @@ public class ContainerTemplate extends AbstractDescribableImpl<ContainerTemplate
 
     @DataBoundSetter
     public void setWorkingDir(String workingDir) {
-        this.workingDir = workingDir;
+        this.workingDir = Util.fixEmpty(workingDir);
     }
 
     public String getWorkingDir() {
@@ -236,6 +239,15 @@ public class ContainerTemplate extends AbstractDescribableImpl<ContainerTemplate
         this.resourceRequestCpu = resourceRequestCpu;
     }
 
+    public String getShell() {
+        return shell;
+    }
+
+    @DataBoundSetter
+    public void setShell(String shell) {
+        this.shell = shell;
+    }
+
     public Map<String,Object> getAsArgs() {
         Map<String,Object> argMap = new TreeMap<>();
 
@@ -261,6 +273,13 @@ public class ContainerTemplate extends AbstractDescribableImpl<ContainerTemplate
         @Restricted(DoNotUse.class) // Used by jelly
         public List<? extends Descriptor> getEnvVarsDescriptors() {
             return DescriptorVisibilityFilter.apply(null, Jenkins.getInstance().getDescriptorList(TemplateEnvVar.class));
+        }
+
+        public FormValidation doCheckName(@QueryParameter String value) {
+            if(!PodTemplateUtils.validateContainerName(value)) {
+                return FormValidation.error(Messages.RFC1123_error(value));
+            }
+            return FormValidation.ok();
         }
     }
 
@@ -365,12 +384,8 @@ public class ContainerTemplate extends AbstractDescribableImpl<ContainerTemplate
         return result;
     }
 
-    public String getShell() {
-        return shell;
-    }
-
-    @DataBoundSetter
-    public void setShell(String shell) {
-        this.shell = shell;
+    private Object readResolve() {
+        this.workingDir = Util.fixEmpty(workingDir);
+        return this;
     }
 }

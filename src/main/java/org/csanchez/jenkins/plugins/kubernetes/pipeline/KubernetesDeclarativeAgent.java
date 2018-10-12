@@ -41,6 +41,7 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
     private List<ContainerTemplate> containerTemplates;
     private String defaultContainer;
     private String yaml;
+    private String yamlFile;
 
     @DataBoundConstructor
     public KubernetesDeclarativeAgent() {
@@ -173,6 +174,15 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
         this.activeDeadlineSeconds = activeDeadlineSeconds;
     }
 
+    public String getYamlFile() {
+        return yamlFile;
+    }
+
+    @DataBoundSetter
+    public void setYamlFile(String yamlFile) {
+        this.yamlFile = yamlFile;
+    }
+
     public Map<String, Object> getAsArgs() {
         Map<String, Object> argMap = new TreeMap<>();
 
@@ -182,7 +192,7 @@ public class KubernetesDeclarativeAgent extends DeclarativeAgent<KubernetesDecla
         List<ContainerTemplate> containerTemplates = getContainerTemplates();
         if (containerTemplate != null) {
             LOGGER.log(Level.WARNING,
-                    "containerTemplate option in declarative pipeline is deprecated, use containerTemplates");
+                    "containerTemplate option in declarative pipeline is deprecated, use yaml syntax to define containers");
             if (containerTemplates.isEmpty()) {
                 containerTemplates = Collections.singletonList(containerTemplate);
             } else {

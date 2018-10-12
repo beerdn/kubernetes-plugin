@@ -31,6 +31,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.csanchez.jenkins.plugins.kubernetes.model.KeyValueEnvVar;
+import org.csanchez.jenkins.plugins.kubernetes.pod.retention.Default;
+import org.csanchez.jenkins.plugins.kubernetes.pod.retention.Never;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.EmptyDirVolume;
 import org.csanchez.jenkins.plugins.kubernetes.volumes.HostPathVolume;
 import org.jenkinsci.plugins.kubernetes.credentials.FileSystemServiceAccountCredential;
@@ -45,6 +47,12 @@ import com.cloudbees.plugins.credentials.Credentials;
 import com.cloudbees.plugins.credentials.SystemCredentialsProvider;
 import com.cloudbees.plugins.credentials.impl.UsernamePasswordCredentialsImpl;
 
+import hudson.plugins.git.GitTool;
+import hudson.slaves.NodeProperty;
+import hudson.slaves.NodePropertyDescriptor;
+import hudson.tools.ToolLocationNodeProperty;
+import hudson.tools.ToolLocationNodeProperty.ToolLocation;
+import hudson.util.DescribableList;
 import hudson.util.Secret;
 
 /**
@@ -63,6 +71,16 @@ public class KubernetesTest {
     public void before() throws Exception {
         r.configRoundtrip();
         cloud = r.jenkins.clouds.get(KubernetesCloud.class);
+    }
+
+    @Test
+    @LocalData()
+    public void upgradeFrom_1_10() throws Exception {
+        List<PodTemplate> templates = cloud.getTemplates();
+        assertPodTemplates(templates);
+        assertEquals(new Never(), cloud.getPodRetention());
+        PodTemplate template = templates.get(0);
+        assertEquals(new Default(), template.getPodRetention());
     }
 
     @Test
@@ -86,6 +104,21 @@ public class KubernetesTest {
         assertPodTemplates(templates);
         assertEquals(Arrays.asList(new KeyValueEnvVar("pod_a_key", "pod_a_value"),
                 new KeyValueEnvVar("pod_b_key", "pod_b_value")), templates.get(0).getEnvVars());
+    }
+
+    @Test
+    @LocalData()
+    public void upgradeFrom_0_10() throws Exception {
+        List<PodTemplate> templates = cloud.getTemplates();
+        PodTemplate template = templates.get(0);
+        DescribableList<NodeProperty<?>,NodePropertyDescriptor> nodeProperties = template.getNodeProperties();
+        assertEquals(1, nodeProperties.size());
+        ToolLocationNodeProperty property = (ToolLocationNodeProperty) nodeProperties.get(0);
+        assertEquals(1, property.getLocations().size());
+        ToolLocation location = property.getLocations().get(0);
+        assertEquals("Default", location.getName());
+        assertEquals("/custom/path", location.getHome());
+        assertEquals(GitTool.class, location.getType().clazz);
     }
 
     @Test
